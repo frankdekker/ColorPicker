@@ -91,7 +91,10 @@ ColorPicker.Palette = new Class({
 	create: function() {
 
 		var f = function( c, p, t ){return new Element( t ? t : 'div', { "class": this.options.classPrefix + c  } ).inject( p )}.bind( this );
-		var i = function( c, p, t ){return new Element( t ? t : 'input', { type: "text", size: 3, maxlength: 3, "class": this.options.classPrefix + c  } ).inject( p )}.bind( this );
+		var i = function( l, c, p, min, max ){
+			new Element( 'span', { "class": this.options.classPrefix + "label", text: l } ).inject( p );
+			return new Element( 'input', { type: "number", min: min, max: max, size: 3, maxlength: 3, "class": this.options.classPrefix + c + " number" } ).inject( p )
+		}.bind( this );
 
 		// create overlay
 		this.overlay = f( "overlay", document.body );
@@ -100,13 +103,13 @@ ColorPicker.Palette = new Class({
 		this.lightbox = f( "lightbox", document.body );
 
 		// palette
-		var palette  = f( "palette", this.lightbox );
-		var overlay1 = f( "overlay1", palette );
-		var overlay2 = f( "overlay2", palette );
-		this.pcursor  = f( "cursor", palette );
+		this.palette  = f( "palette", this.lightbox );
+		this.overlay1 = f( "overlay1", this.palette );
+		this.overlay2 = f( "overlay2", this.palette );
+		this.pcursor  = f( "cursor", this.palette );
 
 		// drag event
-		this.pdrag = new ColorPicker.Drag( palette, {
+		this.pdrag = new ColorPicker.Drag( this.palette, {
 			cursor: false,
 			limit: { x: [0, 255], y: [0, 255] },
 			onDrag: function( x, y ) {
@@ -125,15 +128,33 @@ ColorPicker.Palette = new Class({
 			}.bind( this )
 		});
 
+		// input holders
+		this.input = { rgb: {}, hsb: {} };
+
+		// rgb
+		var rgb = f( "colors-rgb", this.lightbox );
+		var rgbR = f( "color-r", rgb );
+		var rgbG = f( "color-g", rgb );
+		var rgbB = f( "color-b", rgb );
+
+		this.input.rgb.r = i( "R", "input-r", rgbR, 0, 255 );
+		this.input.rgb.g = i( "G", "input-g", rgbG, 0, 255 );
+		this.input.rgb.b = i( "B", "input-b", rgbB, 0, 255 );
+
 		// hsb
 		var hsb = f( "colors-hsb", this.lightbox );
-		var h = f( "color-h", hsb );
-		var s = f( "color-s", hsb );
-		var b = f( "color-b", hsb );
+		var hsbH = f( "color-h", hsb );
+		var hsbS = f( "color-s", hsb );
+		var hsbB = f( "color-b", hsb );
 
-		this.inputH = i( "input-h", h );
-		this.inputS = i( "input-s", s );
-		this.inputB = i( "input-b", b );
+		this.input.hsb.h = i( "H", "input-h", hsbH, 0, 360 );
+		this.input.hsb.s = i( "S", "input-s", hsbS, 0, 100 );
+		this.input.hsb.b = i( "B", "input-b", hsbB, 0, 100 );
+
+		// hex
+		var hex = f( "colors-hex", this.lightbox );
+		new Element( "span", { "class": this.options.classPrefix + "label", text: "HEX" } ).inject( hex );
+		this.input.hex = new Element( "input", { type: "text", "class": this.options.classPrefix + "hex", size: 7, maxlength: 7 } ).inject( hex );
 
 	},
 
@@ -152,8 +173,8 @@ ColorPicker.Palette = new Class({
 
 		// show lightbox
 		this.lightbox.setStyles({
-			top: dScroll.y + ( vPort.y - dBox.y ) / 2,
-			left: dScroll.x + ( vPort.x - dBox.x ) / 2
+			top: Math.max( 0, dScroll.y + ( vPort.y - dBox.y ) / 2 ),
+			left: Math.max( 0, dScroll.x + ( vPort.x - dBox.x ) / 2 )
 		});
 
 	},
@@ -161,6 +182,8 @@ ColorPicker.Palette = new Class({
 
 
 	setColor: function( x, y, z ) {
+
+		var z0 = z;
 
 		x = x === null ? this.pcursor.getStyle( "left" ).toInt() + 6 : x;
 		y = y === null ? this.pcursor.getStyle( "top" ).toInt() + 6 : y;
@@ -173,10 +196,26 @@ ColorPicker.Palette = new Class({
 		h = (h >= 360) ? 0 : (h < 0) ? 0 : h;
 		var hsb = [h, s, b];
 
+		// set overlay hue
+		if ( z0 !== null )
+		{
+			var hex = this.hsbToRgb( h, 100, 100 ).rgbToHex();
+			this.overlay1.setStyle( "background-color", hex );
+		}
+
 		// set HSB
-		this.inputH.value = h;
-		this.inputS.value = s;
-		this.inputB.value = b;
+		this.input.hsb.h.value = h;
+		this.input.hsb.s.value = s;
+		this.input.hsb.b.value = b;
+
+		// set RGB
+		var rgb = this.hsbToRgb( h, s, b );
+		this.input.rgb.r.value = rgb[0];
+		this.input.rgb.g.value = rgb[1];
+		this.input.rgb.b.value = rgb[2];
+
+		// set hex
+		this.input.hex.value = rgb.rgbToHex();
 
 		// set cursors
 		this.pcursor.setStyles({ left: x - 6, top: y - 6 });
@@ -192,9 +231,47 @@ ColorPicker.Palette = new Class({
 	detach: function() {
 		this.rdrag.detach();
 		this.pdrag.detach();
+	},
+
+	rgbToHsb: function( red, green, blue ) {
+		var hue = 0;
+		var max = Math.max(red, green, blue), min = Math.min(red, green, blue);
+		var delta = max - min;
+		var brightness = max / 255, saturation = (max != 0) ? delta / max : 0;
+		if (saturation != 0){
+			var rr = (max - red) / delta;
+			var gr = (max - green) / delta;
+			var br = (max - blue) / delta;
+			if (red == max) hue = br - gr;
+			else if (green == max) hue = 2 + rr - br;
+			else hue = 4 + gr - rr;
+			hue /= 6;
+			if (hue < 0) hue++;
+		}
+		return [Math.round(hue * 360), Math.round(saturation * 100), Math.round(brightness * 100)];
+	},
+
+	hsbToRgb: function( h, s, b ) {
+		var br = Math.round( b / 100 * 255);
+		if ( s == 0){
+			return [br, br, br];
+		} else {
+			var hue = h % 360;
+			var f = hue % 60;
+			var p = Math.round((b * (100 - s)) / 10000 * 255);
+			var q = Math.round((b * (6000 - s * f)) / 600000 * 255);
+			var t = Math.round((b * (6000 - s * (60 - f))) / 600000 * 255);
+			switch (Math.floor(hue / 60)){
+				case 0: return [br, t, p];
+				case 1: return [q, br, p];
+				case 2: return [p, br, t];
+				case 3: return [p, q, br];
+				case 4: return [t, p, br];
+				case 5: return [br, p, q];
+			}
+		}
+		return false;
 	}
-
-
 
 
 });
