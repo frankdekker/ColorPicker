@@ -166,6 +166,11 @@ ColorPicker.Palette = new Class({
 		new Element( "span", { "class": this.options.classPrefix + "label", text: "HEX" } ).inject( hex );
 		this.input.hex = new Element( "input", { type: "text", "class": this.options.classPrefix + "hex", size: 7, maxlength: 7 } ).inject( hex );
 
+		// buttons
+		var buttons = f( "buttons", this.lightbox );
+		this.buttons = {};
+		this.buttons.ok = f( "okbutton", buttons );
+		this.buttons.cancel = f( "cancelbutton", buttons );
 	},
 
 	show: function() {
