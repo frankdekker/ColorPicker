@@ -24,7 +24,23 @@
 	<script>
 		window.addEvent( "domready", function() {
 
-			new ColorPicker( $$('.colorpicker') );
+			new ColorPicker( $$('.colorpicker'),{
+
+				onSelect: function( color ) {
+					console.log( "Select: " + color );
+				},
+				onChange: function( color ) {
+					console.log( "change: " + color );
+
+					document.getElement( "body" ).setStyle( "background-color", color );
+
+				},
+
+				onCancel: function( ) {
+					console.log( "cancel" );
+				}
+
+			});
 		});
 	</script>
 

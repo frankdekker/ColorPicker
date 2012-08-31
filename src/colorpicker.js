@@ -2,7 +2,7 @@
 
 
 var ColorPicker = new Class({
-	Implements: [Events,Options],
+	Implements: [Options],
 	options: {
 		classPrefix: "colorpicker-",
 		presets: [
@@ -26,9 +26,11 @@ var ColorPicker = new Class({
 			"picker-button-cancel": "Cancel"
 		},
 		history: 10,
-		cookie: true
-		// onSelect( color, ColorPicker )
-		// onCancel( ColorPicker )
+		cookie: true,
+		boxshadow: true
+		// onSelect( color )
+		// onChange( color )
+		// onCancel( )
 
 	},
 
@@ -45,16 +47,14 @@ var ColorPicker = new Class({
 	},
 
 	showPresets: function( event ) {
-		this.presets = this.presets || new ColorPicker.Presets( this, this.options );
+		this.presets = this.presets || new ColorPicker.Presets( this.options );
 		this.presets.show( event.target );
 	},
 
 	showPalette: function( event ) {
-		this.palette = this.palette || new ColorPicker.Palette( this, this.options );
-		this.palette.show( );
+		this.palette = this.palette || new ColorPicker.Palette( this.options );
+		this.palette.show( event.target, event.target.value );
 	},
-
-
 
 	/**
 	 * Attach focus listeners to the elements
@@ -82,11 +82,15 @@ var ColorPicker = new Class({
  *
  */
 ColorPicker.Palette = new Class({
-	Implements: [Options],
+	Implements: [Events,Options],
 
-	initialize: function( picker, options ) {
-		this.colorpicker = picker;
+	initialize: function( options ) {
 		this.setOptions( options );
+		this.current = null;
+		this.colors = {};
+
+		this.select = this.select.bind( this );
+		this.cancel = this.cancel.bind( this );
 
 		this.create();
 		this.attach();
@@ -100,11 +104,13 @@ ColorPicker.Palette = new Class({
 			return new Element( 'input', { type: "number", min: min, max: max, size: 3, maxlength: 3, "class": this.options.classPrefix + c + " number" } ).inject( p )
 		}.bind( this );
 
-		// create overlay
-		this.overlay = f( "overlay", document.body );
-
 		// lightbox
 		this.lightbox = f( "lightbox", document.body );
+		this.lightbox.set( "tween", { duration: 201 } );
+
+		// lightbox shadow
+		if ( this.options.boxshadow && Browser.ie && Browser.version <= 8 )
+			this.boxshadow = new Element( "div", { "class": this.options.classPrefix + "ie-boxshadow" }).inject( this.lightbox, 'after' );
 
 		// Browser Quirks
 		if ( Browser.ie7 ) this.lightbox.addClass( "ie7 ie78" );
@@ -179,30 +185,65 @@ ColorPicker.Palette = new Class({
 		this.buttons.cancel = new Element( "a", { href: "javascript:;", "class": this.options.classPrefix + "button cancelbutton", text: this.options.language['picker-button-cancel'] } ).inject( buttons );
 	},
 
-	show: function() {
+	// show picker
+	show: function( element, color ) {
+
+		// store current element
+		this.current = element;
+
+		// sanitize parameter
+		color = ( color && color.hexToRgb ? color.hexToRgb( true ) : null ) || [ 0, 0, 0 ];
+
+		// set current preview
+		this.preview.c.setStyle( "background-color", color.rgbToHex() );
+
+		// set color
+		color = this.rgbToHsb( color[0], color[1], color[2] );
+		color = this.hsbToXyz( color[0], color[1], color[2] );
+		this.setColor( color[0], color[1], color[2], true );
 
 		var dSize = window.getScrollSize();
 		var dBox = this.lightbox.getSize();
 		var vPort = window.getSize();
 		var dScroll = window.getScroll();
 
-		// show overlay
-		this.overlay.setStyles({
-			width: dSize.x,
-			height: dSize.y
-		});
-
 		// show lightbox
 		this.lightbox.setStyles({
+			opacity: 0,
 			top: Math.max( 0, dScroll.y + ( vPort.y - dBox.y ) / 2 ),
 			left: Math.max( 0, dScroll.x + ( vPort.x - dBox.x ) / 2 )
 		});
+		this.lightbox.tween( "opacity", 1 );
 
+		// show boxshadow
+		if ( this.boxshadow )
+		{
+			this.lightbox.get( "tween" ).chain( function() {
+				this.boxshadow.setStyles({
+					width: dBox.x,
+					height: dBox.y,
+					left: this.lightbox.getStyle( "left" ).toInt() - 7,
+					top: this.lightbox.getStyle( "top" ).toInt() - 7
+				});
+				this.boxshadow.tween( "opacity", 1 );
+			}.bind( this ));
+		}
 	},
 
+	// hide picker
+	hide: function() {
 
+		var styleReset = { width: null, height: null, left: null, top: null, opacity: null };
 
-	setColor: function( x, y, z ) {
+		this.lightbox.tween( "opacity", 0 );
+		if ( this.boxshadow ) this.boxshadow.setStyles( styleReset );
+
+		this.lightbox.get( "tween" ).chain( function() {
+			this.lightbox.setStyles( styleReset );
+		}.bind( this ));
+	},
+
+	setColor: function( x, y, z, noEvent ) {
 
 		var z0 = z;
 
@@ -242,17 +283,51 @@ ColorPicker.Palette = new Class({
 
 		// set preview
 		this.preview.n.setStyle( "background-color", hex );
+
+		// fire event
+		if ( !noEvent && this.colors.current != hex ) this.fireEvent( "change", hex );
+
+		// store current color state
+		this.colors.current = hex;
 	},
 
+	select: function() {
+
+		if ( this.current
+		&&   this.current.get( "tag" ) == "input"
+		&&   this.current.get( "type" ) == "text" )
+			this.current.set( "value", this.colors.current );
+
+		// fire event
+		this.fireEvent( "select", this.colors.current );
+		this.hide();
+	},
+
+	cancel: function() {
+		this.fireEvent( "cancel" );
+		this.hide();
+	},
 
 	attach: function() {
 		this.rdrag.attach();
 		this.pdrag.attach();
+		this.buttons.ok.addEvent( "click", this.select );
+		this.buttons.cancel.addEvent( "click", this.cancel );
 	},
 
 	detach: function() {
 		this.rdrag.detach();
 		this.pdrag.detach();
+		this.buttons.ok.removeEvent( "click", this.select );
+		this.buttons.cancel.removeEvent( "click", this.cancel );
+	},
+
+	hsbToXyz: function( h, s, b )
+	{
+		var x = Math.min( Math.max( Math.round( s * 255 / 100 ), 0 ), 255 );
+		var y = Math.min( Math.max( Math.round( ( 100 - b ) * 255 / 100 ), 0 ), 255 );
+		var z = Math.min( Math.max( Math.round( ( 360 - h ) * 255 / 360 ), 0 ), 255 );
+		return [ x, y, z ];
 	},
 
 	rgbToHsb: function( red, green, blue ) {
@@ -305,8 +380,7 @@ ColorPicker.Palette = new Class({
 ColorPicker.Presets = new Class({
 	Implements: [Options],
 
-	initialize: function( picker, options ) {
-		this.colorpicker = picker;
+	initialize: function( options ) {
 		this.setOptions( options );
 
 		this.create();
@@ -404,7 +478,7 @@ ColorPicker.Presets = new Class({
 
 		this.hide();
 
-		this.colorpicker.fireEvent( "select", [ color, this.colorpicker] );
+		this.fireEvent( "select", color );
 	},
 
 	// show preset dropdown
@@ -435,7 +509,7 @@ ColorPicker.Presets = new Class({
 			return;
 
 		this.hide();
-		this.colorpicker.fireEvent( "cancel", this.colorpicker );
+		this.fireEvent( "cancel" );
 	},
 
 	// hide preset dropdown
@@ -593,5 +667,26 @@ ColorPicker.Drag = new Class({
 		events[this.selection] = this.bound.eventStop;
 		this.document.removeEvents( events );
 	}
+
+});
+
+
+
+ColorPicker.KeyBounds = new Class({
+	Implements: [Options],
+
+	initialize: function( elements, options ) {
+		this.elements = elements;
+		this.setOptions( options );
+
+		this.attach();
+	},
+
+	attach: function() {
+		this.elements.addEvent( "keydown" );
+	}
+
+
+
 
 });

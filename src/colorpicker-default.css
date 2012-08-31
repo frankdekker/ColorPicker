@@ -108,19 +108,6 @@
 
 
 /**
- * overlay
- */
-.colorpicker-overlay {
-	background: #fff;
-	opacity:0.8;
-	filter:alpha( opacity=80 );
-	z-index: 100000;
-	position: absolute;
-	top: 0;
-	left: 0;
-}
-
-/**
  * Lightbox
  */
 .colorpicker-lightbox {
@@ -146,14 +133,14 @@
 
 }
 
-/*
-.colorpicker-lightbox.ie8 {
-	filter: progid:DXImageTransform.Microsoft.Shadow(Strength=4, Direction=0, Color='#999999'),
-			progid:DXImageTransform.Microsoft.Shadow(Strength=4, Direction=90, Color='#999999'),
-			progid:DXImageTransform.Microsoft.Shadow(Strength=4, Direction=180, Color='#999999'),
-			progid:DXImageTransform.Microsoft.Shadow(Strength=4, Direction=270, Color='#999999');
+.colorpicker-ie-boxshadow {
+	position: absolute;
+	top: -20000px;
+	left: -20000px;
+	background-color: #000;
+	z-index: 140000;
+	filter:progid:DXImageTransform.Microsoft.Blur(PixelRadius='7', MakeShadow='true', ShadowOpacity='0.80');
 }
-*/
 
 .colorpicker-lightbox .colorpicker-label {
 	font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
