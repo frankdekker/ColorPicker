@@ -128,6 +128,8 @@ ColorPicker.Palette = new Class({
 			}.bind( this )
 		});
 
+		// colors
+
 		// input holders
 		this.input = { rgb: {}, hsb: {} };
 
