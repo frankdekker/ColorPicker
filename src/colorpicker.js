@@ -21,7 +21,9 @@ var ColorPicker = new Class({
 		language: {
 			"presets-button-custom": "Custom...",
 			"picker-label-new": "New",
-			"picker-label-current": "Current"
+			"picker-label-current": "Current",
+			"picker-button-ok": "Select",
+			"picker-button-cancel": "Cancel"
 		},
 		history: 10,
 		cookie: true
@@ -104,6 +106,10 @@ ColorPicker.Palette = new Class({
 		// lightbox
 		this.lightbox = f( "lightbox", document.body );
 
+		// Browser Quirks
+		if ( Browser.ie7 ) this.lightbox.addClass( "ie7 ie78" );
+		if ( Browser.ie8 ) this.lightbox.addClass( "ie8 ie78" );
+
 		// palette
 		this.palette  = f( "palette", this.lightbox );
 		this.overlay1 = f( "overlay1", this.palette );
@@ -133,8 +139,8 @@ ColorPicker.Palette = new Class({
 		// preview
 		var preview = f( "preview", this.lightbox );
 		this.preview = {};
-		this.preview.new = f( "new", preview );
-		this.preview.current = f( "current", preview );
+		this.preview.n = f( "new", preview );
+		this.preview.c = f( "current", preview );
 		new Element( "span", { "class": this.options.classPrefix + "label label-new", text: this.options.language['picker-label-new'] } ).inject( preview );
 		new Element( "span", { "class": this.options.classPrefix + "label label-current", text: this.options.language['picker-label-current'] } ).inject( preview );
 
@@ -169,8 +175,8 @@ ColorPicker.Palette = new Class({
 		// buttons
 		var buttons = f( "buttons", this.lightbox );
 		this.buttons = {};
-		this.buttons.ok = f( "okbutton", buttons );
-		this.buttons.cancel = f( "cancelbutton", buttons );
+		this.buttons.ok = new Element( "a", { href: "javascript:;", "class": this.options.classPrefix + "button okbutton", text: this.options.language['picker-button-ok'] } ).inject( buttons );
+		this.buttons.cancel = new Element( "a", { href: "javascript:;", "class": this.options.classPrefix + "button cancelbutton", text: this.options.language['picker-button-cancel'] } ).inject( buttons );
 	},
 
 	show: function() {
@@ -235,7 +241,7 @@ ColorPicker.Palette = new Class({
 		this.rcursor.setStyles({ top: z - 5 });
 
 		// set preview
-		this.preview.new.setStyle( "background-color", hex );
+		this.preview.n.setStyle( "background-color", hex );
 	},
 
 
