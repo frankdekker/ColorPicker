@@ -19,7 +19,9 @@ var ColorPicker = new Class({
 		],
 		offset: { x: 0, y: 0 },
 		language: {
-			"presets-button-custom": "Custom..."
+			"presets-button-custom": "Custom...",
+			"picker-label-new": "New",
+			"picker-label-current": "Current"
 		},
 		history: 10,
 		cookie: true
@@ -128,7 +130,13 @@ ColorPicker.Palette = new Class({
 			}.bind( this )
 		});
 
-		// colors
+		// preview
+		var preview = f( "preview", this.lightbox );
+		this.preview = {};
+		this.preview.new = f( "new", preview );
+		this.preview.current = f( "current", preview );
+		new Element( "span", { "class": this.options.classPrefix + "label label-new", text: this.options.language['picker-label-new'] } ).inject( preview );
+		new Element( "span", { "class": this.options.classPrefix + "label label-current", text: this.options.language['picker-label-current'] } ).inject( preview );
 
 		// input holders
 		this.input = { rgb: {}, hsb: {} };
@@ -200,10 +208,7 @@ ColorPicker.Palette = new Class({
 
 		// set overlay hue
 		if ( z0 !== null )
-		{
-			var hex = this.hsbToRgb( h, 100, 100 ).rgbToHex();
-			this.overlay1.setStyle( "background-color", hex );
-		}
+			this.overlay1.setStyle( "background-color", this.hsbToRgb( h, 100, 100 ).rgbToHex() );
 
 		// set HSB
 		this.input.hsb.h.value = h;
@@ -217,11 +222,15 @@ ColorPicker.Palette = new Class({
 		this.input.rgb.b.value = rgb[2];
 
 		// set hex
-		this.input.hex.value = rgb.rgbToHex();
+		var hex = rgb.rgbToHex();
+		this.input.hex.value = hex;
 
 		// set cursors
 		this.pcursor.setStyles({ left: x - 6, top: y - 6 });
 		this.rcursor.setStyles({ top: z - 5 });
+
+		// set preview
+		this.preview.new.setStyle( "background-color", hex );
 	},
 
 
