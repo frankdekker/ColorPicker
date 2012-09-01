@@ -856,4 +856,4 @@ if ( !Array.rgbToHsb || !Array.hsbToRgb )
 			return false;
 		}
 	});
-};
+}
