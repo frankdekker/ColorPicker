@@ -53,7 +53,14 @@ var ColorPicker = new Class({
 
 	showPalette: function( event ) {
 		this.palette = this.palette || new ColorPicker.Palette( this.options );
-		this.palette.show( event.target, event.target.value );
+		this.palette.show( event.target.value );
+	},
+
+	onSelect: function() {
+		if ( this.current
+		&&   this.current.get( "tag" ) == "input"
+		&&   this.current.get( "type" ) == "text" )
+			this.current.set( "value", color );
 	},
 
 	/**
@@ -101,7 +108,7 @@ ColorPicker.Palette = new Class({
 		var f = function( c, p, t ){return new Element( t ? t : 'div', { "class": this.options.classPrefix + c  } ).inject( p )}.bind( this );
 		var i = function( l, c, p, min, max ){
 			new Element( 'span', { "class": this.options.classPrefix + "label", text: l } ).inject( p );
-			return new Element( 'input', { type: "number", min: min, max: max, size: 3, maxlength: 3, "class": this.options.classPrefix + c + " number" } ).inject( p )
+			return new Element( 'input', { type: Browser.ie ? "text" : "number", "min": min, "max": max, "size": 3, "maxLength": 3, "class": this.options.classPrefix + c + " number" } ).inject( p )
 		}.bind( this );
 
 		// lightbox
@@ -127,7 +134,7 @@ ColorPicker.Palette = new Class({
 			cursor: false,
 			limit: { x: [0, 255], y: [0, 255] },
 			onDrag: function( x, y ) {
-				this.setColor( x, y, null );
+				this.setColor( [ x, y, this.rcursor.getStyle( "top" ).toInt() + 5 ], 'xyz', 'palette' );
 			}.bind( this )
 		});
 
@@ -138,7 +145,7 @@ ColorPicker.Palette = new Class({
 		this.rdrag = new ColorPicker.Drag( rainbow, {
 			limit: { x: [0, 255], y: [0, 255] },
 			onDrag: function( x, y ) {
-				this.setColor( null, null, y );
+				this.setColor( [ this.pcursor.getStyle( "left" ).toInt() + 6, this.pcursor.getStyle( "top" ).toInt() + 6, y ], 'xyz', 'rainbow' );
 			}.bind( this )
 		});
 
@@ -176,7 +183,29 @@ ColorPicker.Palette = new Class({
 		// hex
 		var hex = f( "colors-hex", this.lightbox );
 		new Element( "span", { "class": this.options.classPrefix + "label", text: "HEX" } ).inject( hex );
-		this.input.hex = new Element( "input", { type: "text", "class": this.options.classPrefix + "hex", size: 7, maxlength: 7 } ).inject( hex );
+		this.input.hex = new Element( "input", { type: "text", "class": this.options.classPrefix + "hex", "size": 7, "maxLength": 7 } ).inject( hex );
+
+		// keybounds
+		this.bounds = {};
+		this.bounds.rgb = new ColorPicker.KeyBounds( [ this.input.rgb.r, this.input.rgb.g, this.input.rgb.b ], {
+			onChange: function( element, value ) {
+				var rgb = [ this.input.rgb.r.get( "value" ).toInt(), this.input.rgb.g.get( "value" ).toInt(), this.input.rgb.b.get( "value" ).toInt() ];
+				this.setColor( rgb, 'rgb', 'rgb' );
+			}.bind( this )
+		});
+		this.bounds.hsb = new ColorPicker.KeyBounds( [ this.input.hsb.h, this.input.hsb.s, this.input.hsb.b ], {
+			onChange: function( element, value ) {
+				var hsb = [ this.input.hsb.h.get( "value" ).toInt(), this.input.hsb.s.get( "value" ).toInt(), this.input.hsb.b.get( "value" ).toInt() ];
+				this.setColor( hsb, 'hsb', 'hsb' );
+			}.bind( this )
+		});
+		this.bounds.hex = new ColorPicker.KeyBounds( [ this.input.hex ], {
+			type: 'hex',
+			onChange: function( element, value ) {
+				var rgb = ( value && value.hexToRgb ? value.hexToRgb( true ) : null ) || [ 0, 0, 0 ];
+				this.setColor( rgb, 'rgb', 'hex' );
+			}.bind( this )
+		});
 
 		// buttons
 		var buttons = f( "buttons", this.lightbox );
@@ -186,10 +215,7 @@ ColorPicker.Palette = new Class({
 	},
 
 	// show picker
-	show: function( element, color ) {
-
-		// store current element
-		this.current = element;
+	show: function( color ) {
 
 		// sanitize parameter
 		color = ( color && color.hexToRgb ? color.hexToRgb( true ) : null ) || [ 0, 0, 0 ];
@@ -198,9 +224,7 @@ ColorPicker.Palette = new Class({
 		this.preview.c.setStyle( "background-color", color.rgbToHex() );
 
 		// set color
-		color = this.rgbToHsb( color[0], color[1], color[2] );
-		color = this.hsbToXyz( color[0], color[1], color[2] );
-		this.setColor( color[0], color[1], color[2], true );
+		this.setColor( color, 'rgb', 'show' );
 
 		var dSize = window.getScrollSize();
 		var dBox = this.lightbox.getSize();
@@ -243,61 +267,74 @@ ColorPicker.Palette = new Class({
 		}.bind( this ));
 	},
 
-	setColor: function( x, y, z, noEvent ) {
+	setColor: function( color, type, source ) {
 
-		var z0 = z;
+		var hex, rgb, hsb, xyz = null;
 
-		x = x === null ? this.pcursor.getStyle( "left" ).toInt() + 6 : x;
-		y = y === null ? this.pcursor.getStyle( "top" ).toInt() + 6 : y;
-		z = z === null ? this.rcursor.getStyle( "top" ).toInt() + 5 : z;
+		// color conversion
+		switch( type )
+		{
+			case "rgb":
+				rgb = color;
+				hex = color.rgbToHex();
+				hsb = color.rgbToHsb();
+				xyz = hsb.hsbToXyz();
+				break;
 
-		// HSB
-		var s = Math.min( Math.max( Math.round((x * 100) / 255), 0 ), 100 );
-		var b = Math.min( Math.max( 100 - Math.round((y * 100) / 255), 0 ), 100 );
-		var h = 360 - Math.round((z * 360) / 255);
-		h = (h >= 360) ? 0 : (h < 0) ? 0 : h;
-		var hsb = [h, s, b];
+			case "hsb":
+				hsb = color;
+				rgb = color.hsbToRgb();
+				xyz = color.hsbToXyz();
+				hex = rgb.rgbToHex();
+				break;
+
+			case "xyz":
+				xyz = color;
+				hsb = color.xyzToHsb();
+				rgb = hsb.hsbToRgb();
+				hex = rgb.rgbToHex();
+				break;
+		}
 
 		// set overlay hue
-		if ( z0 !== null )
-			this.overlay1.setStyle( "background-color", this.hsbToRgb( h, 100, 100 ).rgbToHex() );
+		if ( source != 'palette' )
+			this.overlay1.setStyle( "background-color", hex );
 
 		// set HSB
-		this.input.hsb.h.value = h;
-		this.input.hsb.s.value = s;
-		this.input.hsb.b.value = b;
+		if ( source != 'hsb' )
+		{
+			this.input.hsb.h.value = hsb[0];
+			this.input.hsb.s.value = hsb[1];
+			this.input.hsb.b.value = hsb[2];
+		}
 
 		// set RGB
-		var rgb = this.hsbToRgb( h, s, b );
-		this.input.rgb.r.value = rgb[0];
-		this.input.rgb.g.value = rgb[1];
-		this.input.rgb.b.value = rgb[2];
+		if ( source != 'rgb' )
+		{
+			this.input.rgb.r.value = rgb[0];
+			this.input.rgb.g.value = rgb[1];
+			this.input.rgb.b.value = rgb[2];
+		}
 
 		// set hex
-		var hex = rgb.rgbToHex();
-		this.input.hex.value = hex;
+		if ( source != 'hex' )
+			this.input.hex.value = hex;
 
 		// set cursors
-		this.pcursor.setStyles({ left: x - 6, top: y - 6 });
-		this.rcursor.setStyles({ top: z - 5 });
+		this.pcursor.setStyles({ left: xyz[0] - 6, top: xyz[1] - 6 });
+		this.rcursor.setStyles({ top: xyz[2] - 5 });
 
 		// set preview
 		this.preview.n.setStyle( "background-color", hex );
 
 		// fire event
-		if ( !noEvent && this.colors.current != hex ) this.fireEvent( "change", hex );
+		if ( source != 'show' && this.colors.current != hex ) this.fireEvent( "change", hex );
 
 		// store current color state
 		this.colors.current = hex;
 	},
 
 	select: function() {
-
-		if ( this.current
-		&&   this.current.get( "tag" ) == "input"
-		&&   this.current.get( "type" ) == "text" )
-			this.current.set( "value", this.colors.current );
-
 		// fire event
 		this.fireEvent( "select", this.colors.current );
 		this.hide();
@@ -311,6 +348,9 @@ ColorPicker.Palette = new Class({
 	attach: function() {
 		this.rdrag.attach();
 		this.pdrag.attach();
+		this.bounds.rgb.attach();
+		this.bounds.hsb.attach();
+		this.bounds.hex.attach();
 		this.buttons.ok.addEvent( "click", this.select );
 		this.buttons.cancel.addEvent( "click", this.cancel );
 	},
@@ -318,58 +358,12 @@ ColorPicker.Palette = new Class({
 	detach: function() {
 		this.rdrag.detach();
 		this.pdrag.detach();
+		this.bounds.rgb.detach();
+		this.bounds.hsb.detach();
+		this.bounds.hex.detach();
 		this.buttons.ok.removeEvent( "click", this.select );
 		this.buttons.cancel.removeEvent( "click", this.cancel );
-	},
-
-	hsbToXyz: function( h, s, b )
-	{
-		var x = Math.min( Math.max( Math.round( s * 255 / 100 ), 0 ), 255 );
-		var y = Math.min( Math.max( Math.round( ( 100 - b ) * 255 / 100 ), 0 ), 255 );
-		var z = Math.min( Math.max( Math.round( ( 360 - h ) * 255 / 360 ), 0 ), 255 );
-		return [ x, y, z ];
-	},
-
-	rgbToHsb: function( red, green, blue ) {
-		var hue = 0;
-		var max = Math.max(red, green, blue), min = Math.min(red, green, blue);
-		var delta = max - min;
-		var brightness = max / 255, saturation = (max != 0) ? delta / max : 0;
-		if (saturation != 0){
-			var rr = (max - red) / delta;
-			var gr = (max - green) / delta;
-			var br = (max - blue) / delta;
-			if (red == max) hue = br - gr;
-			else if (green == max) hue = 2 + rr - br;
-			else hue = 4 + gr - rr;
-			hue /= 6;
-			if (hue < 0) hue++;
-		}
-		return [Math.round(hue * 360), Math.round(saturation * 100), Math.round(brightness * 100)];
-	},
-
-	hsbToRgb: function( h, s, b ) {
-		var br = Math.round( b / 100 * 255);
-		if ( s == 0){
-			return [br, br, br];
-		} else {
-			var hue = h % 360;
-			var f = hue % 60;
-			var p = Math.round((b * (100 - s)) / 10000 * 255);
-			var q = Math.round((b * (6000 - s * f)) / 600000 * 255);
-			var t = Math.round((b * (6000 - s * (60 - f))) / 600000 * 255);
-			switch (Math.floor(hue / 60)){
-				case 0: return [br, t, p];
-				case 1: return [q, br, p];
-				case 2: return [p, br, t];
-				case 3: return [p, q, br];
-				case 4: return [t, p, br];
-				case 5: return [br, p, q];
-			}
-		}
-		return false;
 	}
-
 
 });
 
@@ -471,10 +465,7 @@ ColorPicker.Presets = new Class({
 
 		var color = event.target.get( "data-color" );
 
-		if ( this.current
-		&&   this.current.get( "tag" ) == "input"
-	    &&   this.current.get( "type" ) == "text" )
-			this.current.set( "value", color );
+
 
 		this.hide();
 
@@ -673,20 +664,196 @@ ColorPicker.Drag = new Class({
 
 
 ColorPicker.KeyBounds = new Class({
-	Implements: [Options],
+	Implements: [Events,Options],
+	options: {
+		type: 'numbers'
+		//onChange: function( element, value ) {}
+	},
 
 	initialize: function( elements, options ) {
 		this.elements = elements;
 		this.setOptions( options );
 
-		this.attach();
+		this.onKeyDown = this.onKeyDown.bind( this );
+		this.onValidate = this.onValidate.bind( this );
+	},	
+
+	onKeyDown: function( event ) {
+
+		switch( event.code )
+		{
+			case 35: // home
+			case 36: // end
+			case 37: // up
+			case 38: // left
+			case 39: // down
+			case 40: // right
+			case 46: // delete
+			case  8: // backspace
+
+			case 96: // num 0 - 9
+			case 97:
+			case 98:
+			case 99:
+			case 100:
+			case 101:
+			case 102:
+			case 103:
+			case 104:
+			case 105:
+				return true;
+
+			case 48: // 0 - 9
+			case 49:
+			case 50:
+			case 51:
+			case 52:
+			case 53:
+			case 54:
+			case 55:
+			case 56:
+			case 57:
+				if ( event.shift ) break;
+				return true;
+		}
+
+		if ( this.options.type == 'numbers' )
+		{
+			event.stop();
+			return false;
+		}
+	},
+
+	onValidate: function( event ) {
+
+		var element = event.target;
+		var previous = element.retrieve( "keybounds:previous" );
+		var value = element.value;
+		var min, max;
+
+		if ( !value || value == null || value == undefined || value == "" )
+			return;
+
+		value = value.trim();
+
+		// sanitize
+		if ( this.options.type == 'numbers' )
+			value = value.replace( /[^0-9]/g, "" );
+
+		else if ( this.options.type == 'hex' )
+			value = value.replace( /[^#A-Fa-f0-9]/g, "" );
+
+		// limit
+		if ( (min = element.get( "min" )) && value.toInt() < min.toInt() )
+			value = min;
+
+		if ( (max = element.get( "max" )) && value.toInt() > max.toInt() )
+			value = max;
+
+		if ( element.value != value )
+			element.value = value;
+
+		if ( !previous || previous != value )
+		{
+			element.store( "keybounds:previous", value );
+			this.fireEvent( "change", [element, value ] );
+		}
 	},
 
 	attach: function() {
-		this.elements.addEvent( "keydown" );
+		this.elements.each( function( elm ) {
+			elm.addEvent( "keydown", this.onKeyDown );
+			elm.addEvent( "keyup", this.onValidate );
+			elm.addEvent( "change", this.onValidate );
+			elm.addEvent( "paste", this.onValidate );
+		}.bind( this ) );
+	},
+
+	detach: function() {
+		this.elements.each( function( elm ) {
+			elm.removeEvent( "keydown", this.onKeyDown );
+			elm.removeEvent( "keyup", this.onValidate );
+			elm.removeEvent( "change", this.onValidate );
+			elm.removeEvent( "paste", this.onValidate );
+		}.bind( this ) );
+	}
+});
+
+/**
+ * HSB - XYZ conversion functions
+ */
+Array.implement({
+
+	hsbToXyz: function()
+	{
+		var h = this[0], s = this[1], b = this[2];
+		var x = Math.min( Math.max( Math.round( s * 255 / 100 ), 0 ), 255 );
+		var y = Math.min( Math.max( Math.round( ( 100 - b ) * 255 / 100 ), 0 ), 255 );
+		var z = Math.min( Math.max( Math.round( ( 360 - h ) * 255 / 360 ), 0 ), 255 );
+		return [ x, y, z ];
+	},
+
+	xyzToHsb: function() {
+		var x = this[0], y = this[1], z = this[2];
+		var s = Math.min( Math.max( Math.round((x * 100) / 255), 0 ), 100 );
+		var b = Math.min( Math.max( 100 - Math.round((y * 100) / 255), 0 ), 100 );
+		var h = 360 - Math.round((z * 360) / 255);
+		h = (h >= 360) ? 0 : (h < 0) ? 0 : h;
+		return [h, s, b];
 	}
 
-
-
-
 });
+
+/**
+ * Add RGB - HSB functions, if not available
+ */
+if ( !Array.rgbToHsb || !Array.hsbToRgb )
+{
+	Array.implement({
+
+		rgbToHsb: function(){
+			var red = this[0],
+				green = this[1],
+				blue = this[2],
+				hue = 0;
+			var max = Math.max(red, green, blue),
+				min = Math.min(red, green, blue);
+			var delta = max - min;
+			var brightness = max / 255,
+				saturation = (max != 0) ? delta / max : 0;
+			if (saturation != 0){
+				var rr = (max - red) / delta;
+				var gr = (max - green) / delta;
+				var br = (max - blue) / delta;
+				if (red == max) hue = br - gr;
+				else if (green == max) hue = 2 + rr - br;
+				else hue = 4 + gr - rr;
+				hue /= 6;
+				if (hue < 0) hue++;
+			}
+			return [Math.round(hue * 360), Math.round(saturation * 100), Math.round(brightness * 100)];
+		},
+
+		hsbToRgb: function(){
+			var br = Math.round(this[2] / 100 * 255);
+			if (this[1] == 0){
+				return [br, br, br];
+			} else {
+				var hue = this[0] % 360;
+				var f = hue % 60;
+				var p = Math.round((this[2] * (100 - this[1])) / 10000 * 255);
+				var q = Math.round((this[2] * (6000 - this[1] * f)) / 600000 * 255);
+				var t = Math.round((this[2] * (6000 - this[1] * (60 - f))) / 600000 * 255);
+				switch (Math.floor(hue / 60)){
+					case 0: return [br, t, p];
+					case 1: return [q, br, p];
+					case 2: return [p, br, t];
+					case 3: return [p, q, br];
+					case 4: return [t, p, br];
+					case 5: return [br, p, q];
+				}
+			}
+			return false;
+		}
+	});
+};

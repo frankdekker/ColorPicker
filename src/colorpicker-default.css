@@ -283,12 +283,12 @@
 	font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 	display: inline-block;
 	height: 20px;
-	padding: 4px 6px;
+	padding: 4px 6px 4px 2px;
 	margin: 0 0 9px 0;
 	font-size: 14px;
 	text-align: right;
 	line-height: 20px;
-	width: 40px;
+	width: 44px;
 	color: #555555;
 	vertical-align: top;
 	-webkit-border-radius: 0 3px 3px 0;
@@ -320,7 +320,7 @@
 
 
 .colorpicker-lightbox input.colorpicker-hex {
-	width: 131px;
+	width: 135px;
 }
 
 

@@ -9,8 +9,8 @@
 	<script src="../../src/colorpicker.js"></script>
 
 	<style>
-		html, body {
-			background-color: #ffffdd;
+		html {
+			background-color: #ffffff;
 		}
 	</style>
 
@@ -18,7 +18,7 @@
 <body>
 
 	<div id="layout" style="margin: 20px auto;width:200px">
-		<input type="text" class="colorpicker" size="6" maxlength="7" value="#ff0000">
+		<input type="text" class="colorpicker" size="6" maxlength="7" value="#ffffff">
 	</div>
 
 	<script>
@@ -32,7 +32,7 @@
 				onChange: function( color ) {
 					console.log( "change: " + color );
 
-					document.getElement( "body" ).setStyle( "background-color", color );
+					document.getElement( "html" ).setStyle( "background-color", color );
 
 				},
 
@@ -41,8 +41,12 @@
 				}
 
 			});
+
 		});
 	</script>
+
+
+<input type="text" maxlength="7"/>
 
 </body>
 </html>
