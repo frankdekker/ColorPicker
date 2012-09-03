@@ -236,6 +236,10 @@
 	        border-radius: 3px;
 }
 
+.colorpicker-lightbox.ie7 .colorpicker-preview {
+	margin-bottom: 16px;
+}
+
 .colorpicker-lightbox .colorpicker-preview .colorpicker-new {
 	float: left;
 	width: 90px;
@@ -310,7 +314,11 @@
 	   -moz-transition: border linear 0.2s, box-shadow linear 0.2s;
 	     -o-transition: border linear 0.2s, box-shadow linear 0.2s;
 	        transition: border linear 0.2s, box-shadow linear 0.2s;
+}
 
+.colorpicker-lightbox.ie7 input[type="text"],
+.colorpicker-lightbox.ie7 input[type="number"] {
+	margin-top: -1px;
 }
 
 .colorpicker-lightbox input[type="text"]:focus,

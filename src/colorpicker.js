@@ -37,26 +37,43 @@ var ColorPicker = new Class({
 	initialize: function( elements, options ) {
 		this.elements = elements;
 		this.setOptions( options );
+		this.current = null;
 
 		// bind function
-		this.showPresets = this.showPresets.bind( this );
+		this.binds = {
+			presets: function( event ) { this.showPresets( event.target ); }.bind( this )
+		};
+
 		this.showPalette  = this.showPalette.bind( this );
+		this.onSelect = this.onSelect.bind( this );
 
 		// attach events
 		this.attach();
 	},
 
-	showPresets: function( event ) {
-		this.presets = this.presets || new ColorPicker.Presets( this.options );
-		this.presets.show( event.target );
+	showPresets: function( element ) {
+		this.current = element ? element : this.current;
+
+		if ( !this.presets )
+		{
+			this.presets = new ColorPicker.Presets( this.options );
+			this.presets.addEvent( "select", this.onSelect );
+		}
+		this.presets.show( this.current );
 	},
 
-	showPalette: function( event ) {
-		this.palette = this.palette || new ColorPicker.Palette( this.options );
-		this.palette.show( event.target.value );
+	showPalette: function( element ) {
+		this.current = element ? element : this.current;
+
+		if ( !this.palette )
+		{
+			this.palette = new ColorPicker.Palette( this.options );
+			this.palette.addEvent( "select", this.onSelect );
+		}
+		this.palette.show( this.current ? this.current.get( "value" ) : null );
 	},
 
-	onSelect: function() {
+	onSelect: function( color ) {
 		if ( this.current
 		&&   this.current.get( "tag" ) == "input"
 		&&   this.current.get( "type" ) == "text" )
@@ -68,8 +85,10 @@ var ColorPicker = new Class({
 	 */
 	attach: function() {
 		this.elements.each( function( elm ) {
-			elm.addEvent( "click", this.showPalette );
+			elm.addEvent( "click", this.binds.presets );
 		}.bind( this ));
+		if ( this.presets ) this.presets.attach();
+		if ( this.palette ) this.palette.attach();
 	},
 
 	/**
@@ -77,8 +96,10 @@ var ColorPicker = new Class({
 	 */
 	detach: function() {
 		this.elements.each( function( elm ) {
-			elm.removeEvent( "click", this.showPresets );
+			elm.removeEvent( "click", this.binds.presets );
 		}.bind( this ));
+		if ( this.presets ) this.presets.detach();
+		if ( this.palette ) this.palette.detach();
 	}
 
 });
@@ -372,7 +393,7 @@ ColorPicker.Palette = new Class({
  * Presets
  */
 ColorPicker.Presets = new Class({
-	Implements: [Options],
+	Implements: [Events,Options],
 
 	initialize: function( options ) {
 		this.setOptions( options );
@@ -391,6 +412,7 @@ ColorPicker.Presets = new Class({
 	create: function() {
 		// create dropdown
 		this.dropdown = new Element( 'div', { "class": this.options.classPrefix + "dropdown" } ).inject( document.body );
+		this.dropdown.set( "tween", { duration: 'short' });
 
 		// Browser Quirks
 		if ( Browser.ie7 ) this.dropdown.addClass( "ie7 ie78" );
@@ -425,6 +447,11 @@ ColorPicker.Presets = new Class({
 						"class": this.options.classPrefix + "presets-color",
 						"title": color.toUpperCase(),
 						"data-color": color,
+						events: {
+							"mouseover": function( event ) {
+								this.fireEvent( "change", event.target.get( "data-color" ) );
+							}.bind( this )
+						},
 						styles: {
 							backgroundColor: color
 						}
@@ -492,9 +519,9 @@ ColorPicker.Presets = new Class({
 
 	// blur dropdown
 	blur: function( event ) {
-		console.log( event.target );
 
 		if ( event
+		&&   event.target
 		&& ( event.target.hasClass( this.options.classPrefix + "dropdown" )
 		||   event.target.getParent( "." + this.options.classPrefix + "dropdown" ) ) )
 			return;
