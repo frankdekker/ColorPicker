@@ -301,7 +301,7 @@ ColorPicker.Palette = new Class({
 
 		// set overlay hue
 		if ( source != 'palette' )
-			this.overlay1.setStyle( "background-color", hex );
+			this.overlay1.setStyle( "background-color", [ hsb[0], 100, 100 ].hsbToRgb().rgbToHex() );
 
 		// set HSB
 		if ( source != 'hsb' )
