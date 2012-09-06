@@ -2,7 +2,7 @@
 
 
 var ColorPicker = new Class({
-	Implements: [Options],
+	Implements: [Events,Options],
 	options: {
 		classPrefix: "colorpicker-",
 		presets: [
@@ -20,10 +20,10 @@ var ColorPicker = new Class({
 		offset: { x: 0, y: 0 },
 		language: {
 			"presets-button-custom": "Custom...",
-			"picker-label-new": "New",
-			"picker-label-current": "Current",
-			"picker-button-ok": "Select",
-			"picker-button-cancel": "Cancel"
+			"picker-label-new":      "New",
+			"picker-label-current":  "Current",
+			"picker-button-ok":      "Select",
+			"picker-button-cancel":  "Cancel"
 		},
 		history: 10,
 		cookie: true,
@@ -44,9 +44,6 @@ var ColorPicker = new Class({
 			presets: function( event ) { this.showPresets( event.target ); }.bind( this )
 		};
 
-		this.showPalette  = this.showPalette.bind( this );
-		this.onSelect = this.onSelect.bind( this );
-
 		// attach events
 		this.attach();
 	},
@@ -57,28 +54,13 @@ var ColorPicker = new Class({
 		if ( !this.presets )
 		{
 			this.presets = new ColorPicker.Presets( this.options );
-			this.presets.addEvent( "select", this.onSelect );
+			this.presets.addEvent( "select", function( color ) { this.fireEvent( "select", [ color, this.current, this ] ); }.bind( this ) );
+			this.presets.addEvent( "change", function( color ) { this.fireEvent( "change", [ color, this.current, this ] ); }.bind( this ) );
+			this.presets.addEvent( "cancel", function(       ) { this.fireEvent( "cancel", [ this.current, this ] ); }.bind( this ) );
 		}
 		this.presets.show( this.current );
 	},
 
-	showPalette: function( element ) {
-		this.current = element ? element : this.current;
-
-		if ( !this.palette )
-		{
-			this.palette = new ColorPicker.Palette( this.options );
-			this.palette.addEvent( "select", this.onSelect );
-		}
-		this.palette.show( this.current ? this.current.get( "value" ) : null );
-	},
-
-	onSelect: function( color ) {
-		if ( this.current
-		&&   this.current.get( "tag" ) == "input"
-		&&   this.current.get( "type" ) == "text" )
-			this.current.set( "value", color );
-	},
 
 	/**
 	 * Attach focus listeners to the elements
@@ -399,11 +381,9 @@ ColorPicker.Presets = new Class({
 		this.setOptions( options );
 
 		this.create();
-		this.loadColors();
 
 		this.blur = this.blur.bind( this );
 		this.hide = this.hide.bind( this );
-
 
 		// cookie domain
 		this.domain = document.location.hostname == "localhost" ? false : document.location.hostname;
@@ -472,7 +452,17 @@ ColorPicker.Presets = new Class({
 			events: {
 				click: function() {
 					this.hide();
-					this.colorpicker.showPalette();
+
+					if ( !this.palette )
+					{
+						this.palette = new ColorPicker.Palette( this.options );
+						this.palette.addEvent( "select", function( color ) { this.fireEvent( "select", color );	this.addColor( color );	}.bind( this ));
+						this.palette.addEvent( "change", function( color ) { this.fireEvent( "change", color ); }.bind( this ));
+						this.palette.addEvent( "cancel", function(       ) { this.fireEvent( "cancel" ); }.bind( this ));
+					}
+
+					this.palette.show( this.current ? this.current.get( "value" ) : null );
+
 				}.bind( this )
 			}
 		}).inject( box );
@@ -481,27 +471,39 @@ ColorPicker.Presets = new Class({
 		if ( this.options.history > 0 )
 		{
 			this.history = new Element( 'div', { "class": this.options.classPrefix + "history"  } ).inject( box );
+			this.history.addEvent( "click:relay(div."+this.options.classPrefix+"history-color)", this.select.bind( this ) );
+
 			for ( var i = 0; i < this.options.history; i++ )
-				new Element( 'div', { "class": this.options.classPrefix + "history-color" } ).inject( this.history );
+			{
+				new Element( 'div', {
+					"class": this.options.classPrefix + "history-color",
+					events: {
+						"mouseover": function( event ) {
+							if ( event.target && event.target.get( "data-color" ) )
+								this.fireEvent( "change", event.target.get( "data-color" ) );
+						}.bind( this )
+					}
+				}).inject( this.history );
+			}
+
+
 			new Element( 'div', { styles: { clear: 'both' } } ).inject( this.history );
 		}
 	},
 
 	// select color
 	select: function( event ) {
-
 		var color = event.target.get( "data-color" );
-
-
-
+		if ( !color ) return;
 		this.hide();
-
 		this.fireEvent( "select", color );
 	},
 
 	// show preset dropdown
 	show: function( element ) {
+
 		this.current = element;
+		this.loadColors();
 
 		document.addEvent( "mousedown", this.blur );
 
@@ -555,6 +557,36 @@ ColorPicker.Presets = new Class({
 		}.bind( this ));
 	},
 
+	// add color to history
+	addColor: function( color ) {
+
+		console.log( "add color: " + color );
+
+		var i, c, colors = new Array();
+
+		// gather colors
+		var history = this.history.getElements( "." + this.options.classPrefix + "history-color" );
+		for ( i = 0; i < history.length; i++ )
+		{
+			c = history[i].get( "data-color" );
+			if ( c && !colors.contains( c ) ) colors.push( c );
+		}
+
+		// add color
+		if ( color && !colors.contains( color ) ) colors.push( color );
+
+		// check max size
+		if ( colors.length > this.options.history )
+			colors = colors.slice( colors.length - this.options.history );
+
+		// apply new colors
+		for ( i = 0; i < colors.length; i++ )
+			history[i].set( "data-color", colors[i] ).setStyle( "background-color", colors[i] );
+
+		// save colors to cookie
+		this.saveColors();
+	},
+
 	// save colors
 	saveColors: function() {
 		if ( !this.options.cookie ) return;
@@ -564,6 +596,7 @@ ColorPicker.Presets = new Class({
 		// gather colors
 		this.history.getElements( "." + this.options.classPrefix + "history-color" ).each( function( elm ) {
 			var color = elm.get( "data-color" );
+			if ( color ) color = color.replace( "#", "" );
 			if ( color && !colors.contains( color ) ) colors.push( color );
 		}.bind( this ));
 
@@ -579,7 +612,15 @@ ColorPicker.Presets = new Class({
 		if ( !colors ) return;
 		colors = colors.split( "|" );
 
-		console.log( colors );
+		var history = this.history.getElements( "." + this.options.classPrefix + "history-color" );
+		var length = Math.min( colors.length, history.length );
+		var i, c;
+
+		for ( i = 0; i < length; i++ )
+		{
+			c = "#" + colors[i];
+			history[i].set( "data-color", c ).setStyle( "background-color", c );
+		}
 	}
 });
 

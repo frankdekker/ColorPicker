@@ -26,11 +26,14 @@
 
 			new ColorPicker( $$('.colorpicker'),{
 
-				onSelect: function( color ) {
+				onSelect: function( color, element ) {
 					console.log( "Select: " + color );
+					element.set( "value", color );
+					document.getElement( "html" ).setStyle( "background-color", color );
+
 				},
 				onChange: function( color ) {
-					console.log( "change: " + color );
+					//console.log( "change: " + color );
 
 					document.getElement( "html" ).setStyle( "background-color", color );
 
